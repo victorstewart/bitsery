@@ -384,16 +384,6 @@ struct InputAdapterBaseCRTP
     swapDataBits(buf, count, ShouldSwap<typename Adapter::TConfig, T>{});
   }
 
-  template<size_t SIZE, typename T>
-  T* readBuffer(T* buf, size_t count)
-  {
-    static_assert(std::is_integral<T>(), "");
-    static_assert(sizeof(T) == SIZE, "");
-    static_cast<Adapter*>(this)->readInternalBuffer(
-      reinterpret_cast<typename Adapter::TValue*>(buf), sizeof(T) * count);
-    swapDataBits(buf, count, ShouldSwap<typename Adapter::TConfig, T>{});
-  }
-
   template<typename T>
   void readBits(T&, size_t)
   {
