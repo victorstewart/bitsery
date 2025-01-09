@@ -261,6 +261,15 @@ private:
     writeInternalImpl(data, size);
   }
 
+  TValue* writeInternalBuffer(size_t size)
+  {
+    const size_t newOffset = _currOffset + size;
+    maybeResize(newOffset, TResizable{});
+    _currOffset = newOffset;
+    return _beginIt + static_cast<diff_t>(_currOffset);
+  }
+
+
   Buffer* _buffer;
   TIterator _beginIt;
   size_t _currOffset{ 0 };

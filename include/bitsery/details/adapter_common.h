@@ -300,6 +300,15 @@ struct OutputAdapterBaseCRTP
     writeSwappedBuffer(buf, count, ShouldSwap<typename Adapter::TConfig, T>{});
   }
 
+  template<size_t SIZE, typename T>
+  T* writeBuffer(size_t count)
+  {
+    static_assert(std::is_integral<T>(), "");
+    static_assert(sizeof(T) == SIZE, "");
+
+    return static_cast<Adapter*>(this)->writeInternalBuffer(count * sizeof(T));
+  }
+
   template<typename T>
   void writeBits(const T&, size_t)
   {
@@ -367,6 +376,16 @@ struct InputAdapterBaseCRTP
 
   template<size_t SIZE, typename T>
   void readBuffer(T* buf, size_t count)
+  {
+    static_assert(std::is_integral<T>(), "");
+    static_assert(sizeof(T) == SIZE, "");
+    static_cast<Adapter*>(this)->readInternalBuffer(
+      reinterpret_cast<typename Adapter::TValue*>(buf), sizeof(T) * count);
+    swapDataBits(buf, count, ShouldSwap<typename Adapter::TConfig, T>{});
+  }
+
+  template<size_t SIZE, typename T>
+  T* readBuffer(T* buf, size_t count)
   {
     static_assert(std::is_integral<T>(), "");
     static_assert(sizeof(T) == SIZE, "");
