@@ -321,7 +321,7 @@ struct OutputAdapterBaseCRTP
   }
 
   template <size_t ALIGNMENT>
-  TValue* allocateForDirectWrite(size_t size)
+  typename Adapter::TValue* directWriteBuffer(size_t size)
   {
     static_assert((ALIGNMENT & (ALIGNMENT - 1)) == 0, "Alignment must be a power of two");
     return static_cast<Adapter*>(this)->template allocateForDirectWrite<ALIGNMENT>(size);
