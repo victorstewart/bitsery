@@ -320,8 +320,8 @@ struct OutputAdapterBaseCRTP
       "create Serializer with bit packing enabled.");
   }
 
-  template <size_t ALIGNMENT>
-  typename Adapter::TValue* directWriteBuffer(size_t size)
+  template <size_t ALIGNMENT, typename TValue>
+  TValue* directWriteBuffer(size_t size)
   {
     static_assert((ALIGNMENT & (ALIGNMENT - 1)) == 0, "Alignment must be a power of two");
     return static_cast<Adapter*>(this)->template allocateForDirectWrite<ALIGNMENT>(size);
