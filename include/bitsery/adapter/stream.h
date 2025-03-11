@@ -193,6 +193,13 @@ private:
     _ostream->rdbuf()->sputn(data, size);
   }
 
+  template <size_t ALIGNMENT>
+  TValue* allocateForDirectWrite(size_t size)
+  {
+    static_assert(always_false<BasicOutputStreamAdapter>::value, "allocateForDirectWrite not implemented for BasicOutputStreamAdapter");
+    return nullptr;
+  }
+
   std::basic_ostream<TChar, CharTraits>* _ostream;
 };
 

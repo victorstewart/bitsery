@@ -43,6 +43,17 @@ enum class ReaderError
 
 namespace details {
 
+template <size_t ALIGNMENT, typename Iterator>
+inline bool is_sufficiently_aligned(const Iterator& it) 
+{
+  static_assert((ALIGNMENT & (ALIGNMENT - 1)) == 0, "Alignment must be a power of two");
+  auto ptr = std::addressof(*it);
+  return reinterpret_cast<std::uintptr_t>(ptr) % ALIGNMENT == 0;
+}
+
+template <typename T>
+struct always_false : std::false_type {};
+
 /**
  * size read/write functions
  */
@@ -300,15 +311,6 @@ struct OutputAdapterBaseCRTP
     writeSwappedBuffer(buf, count, ShouldSwap<typename Adapter::TConfig, T>{});
   }
 
-  template<size_t SIZE, typename T>
-  T* writeBuffer(size_t count)
-  {
-    static_assert(std::is_integral<T>(), "");
-    static_assert(sizeof(T) == SIZE, "");
-
-    return static_cast<Adapter*>(this)->writeInternalBuffer(count * sizeof(T));
-  }
-
   template<typename T>
   void writeBits(const T&, size_t)
   {
@@ -316,6 +318,13 @@ struct OutputAdapterBaseCRTP
       std::is_void<T>::value,
       "Bit-packing is not enabled.\nEnable by call to `enableBitPacking`) or "
       "create Serializer with bit packing enabled.");
+  }
+
+  template <size_t ALIGNMENT>
+  TValue* allocateForDirectWrite(size_t size)
+  {
+    static_assert((ALIGNMENT & (ALIGNMENT - 1)) == 0, "Alignment must be a power of two");
+    return static_cast<Adapter*>(this)->template allocateForDirectWrite<ALIGNMENT>(size);
   }
 
   void align() {}

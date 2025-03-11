@@ -269,6 +269,21 @@ private:
     return _beginIt + static_cast<diff_t>(_currOffset);
   }
 
+  template <size_t ALIGNMENT>
+  TValue* allocateForDirectWrite(size_t size)
+  {
+    assert(details::is_sufficiently_aligned<ALIGNMENT>(_beginIt));
+
+    auto padding = (ALIGNMENT - (_currOffset % ALIGNMENT)) % ALIGNMENT;
+
+    memset(&_beginIt[_currOffset], 0, padding);
+
+    auto res = _beginIt + static_cast<diff_t>(_currOffset + padding);
+
+    _currOffset += size + padding;
+
+    return res;
+  }
 
   Buffer* _buffer;
   TIterator _beginIt;
