@@ -196,7 +196,7 @@ private:
   template <size_t ALIGNMENT>
   TValue* allocateForDirectWrite(size_t size)
   {
-    static_assert(always_false<BasicOutputStreamAdapter>::value, "allocateForDirectWrite not implemented for BasicOutputStreamAdapter");
+    static_assert(details::always_false<BasicOutputStreamAdapter>::value, "allocateForDirectWrite not implemented for BasicOutputStreamAdapter");
     return nullptr;
   }
 
