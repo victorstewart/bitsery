@@ -33,8 +33,7 @@ namespace traits {
 template<typename T, typename Allocator>
 struct ContainerTraits<std::list<T, Allocator>>
   : public StdContainer<std::list<T, Allocator>, true, false>
-{
-};
+{};
 
 }
 

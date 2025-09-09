@@ -214,8 +214,7 @@ TYPED_TEST(SerializeContainerFixedSizeArithmeticTypes, ArithmeticValues)
 template<typename T>
 class SerializeContainerFixedSizeCompositeTypes
   : public SerializeContainerFixedSizeArithmeticTypes<T>
-{
-};
+{};
 
 using StaticContainersWithCompositeTypes =
   ::testing::Types<std::array<MyStruct1, 4>, MyStruct1[4]>;

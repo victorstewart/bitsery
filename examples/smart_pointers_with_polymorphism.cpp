@@ -191,14 +191,12 @@ namespace ext {
 template<>
 struct PolymorphicBaseClass<Shape>
   : PolymorphicDerivedClasses<Circle, Rectangle>
-{
-};
+{};
 
 template<>
 struct PolymorphicBaseClass<Rectangle>
   : PolymorphicDerivedClasses<RoundedRectangle>
-{
-};
+{};
 }
 }
 

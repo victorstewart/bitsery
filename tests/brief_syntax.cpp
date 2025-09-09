@@ -38,9 +38,9 @@
 #include <bitsery/brief_syntax/unordered_set.h>
 #include <bitsery/brief_syntax/vector.h>
 #if __cplusplus > 201402L
+#include <bitsery/brief_syntax/optional.h>
 #include <bitsery/brief_syntax/tuple.h>
 #include <bitsery/brief_syntax/variant.h>
-#include <bitsery/brief_syntax/optional.h>
 #if __cplusplus > 202002L
 #include <bitsery/brief_syntax/bitset.h>
 #endif

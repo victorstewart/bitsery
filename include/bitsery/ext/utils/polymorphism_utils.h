@@ -35,8 +35,7 @@ namespace ext {
 // helper type, that contains list of types
 template<typename...>
 struct PolymorphicClassesList
-{
-};
+{};
 
 // specialize for your base class by deriving from PolymorphicDerivedClasses
 // with list of derivatives that DIRECTLY inherits from your base class.

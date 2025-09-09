@@ -356,13 +356,11 @@ struct DerivedMemberSerialize : public BaseNonMemberSerialize
 namespace bitsery {
 template<>
 struct SelectSerializeFnc<DerivedPrivateBase> : UseNonMemberFnc
-{
-};
+{};
 
 template<>
 struct SelectSerializeFnc<DerivedMemberSerialize> : UseMemberFnc
-{
-};
+{};
 }
 
 TEST(

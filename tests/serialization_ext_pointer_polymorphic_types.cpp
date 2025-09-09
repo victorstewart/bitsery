@@ -147,8 +147,7 @@ namespace ext {
 template<>
 struct PolymorphicBaseClass<Base>
   : PolymorphicDerivedClasses<Derived1, Derived2>
-{
-};
+{};
 
 // this is commented on purpose, to test scenario when base class is registered
 // (Base) but using instance of Derived1 which is not registered as base
@@ -160,8 +159,7 @@ struct PolymorphicBaseClass<Base>
 template<>
 struct PolymorphicBaseClass<Derived2>
   : PolymorphicDerivedClasses<MultipleVirtualInheritance>
-{
-};
+{};
 
 }
 }

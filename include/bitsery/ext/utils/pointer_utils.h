@@ -329,8 +329,7 @@ public:
     : std::integral_constant<
         bool,
         RTTI::template isPolymorphic<typename TPtrManager<T>::TElement>()>
-  {
-  };
+  {};
 
   template<PointerOwnershipType Value>
   using OwnershipType = std::integral_constant<PointerOwnershipType, Value>;

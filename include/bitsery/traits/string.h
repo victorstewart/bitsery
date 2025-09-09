@@ -36,8 +36,7 @@ namespace traits {
 template<typename CharT, typename Traits, typename Allocator>
 struct ContainerTraits<std::basic_string<CharT, Traits, Allocator>>
   : public StdContainer<std::basic_string<CharT, Traits, Allocator>, true, true>
-{
-};
+{};
 
 template<typename CharT, typename Traits, typename Allocator>
 struct TextTraits<std::basic_string<CharT, Traits, Allocator>>
@@ -72,8 +71,7 @@ template<typename CharT, typename Traits, typename Allocator>
 struct BufferAdapterTraits<std::basic_string<CharT, Traits, Allocator>>
   : public StdContainerForBufferAdapter<
       std::basic_string<CharT, Traits, Allocator>>
-{
-};
+{};
 
 }
 

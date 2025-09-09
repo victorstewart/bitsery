@@ -32,21 +32,18 @@ namespace traits {
 template<typename T, typename Allocator>
 struct ContainerTraits<std::vector<T, Allocator>>
   : public StdContainer<std::vector<T, Allocator>, true, true>
-{
-};
+{};
 
 // bool vector is not contiguous, do not copy it directly to buffer
 template<typename Allocator>
 struct ContainerTraits<std::vector<bool, Allocator>>
   : public StdContainer<std::vector<bool, Allocator>, true, false>
-{
-};
+{};
 
 template<typename T, typename Allocator>
 struct BufferAdapterTraits<std::vector<T, Allocator>>
   : public StdContainerForBufferAdapter<std::vector<T, Allocator>>
-{
-};
+{};
 
 }
 
