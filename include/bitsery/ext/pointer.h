@@ -104,7 +104,7 @@ struct PtrObserverManager
 
   static void destroyPolymorphic(T& obj,
                                  MemResourceBase*,
-                                 PolymorphicHandlerBase&)
+                                 const std::shared_ptr<PolymorphicHandlerBase>&)
   {
     obj = nullptr;
   }
@@ -130,45 +130,20 @@ struct NonPtrManager
 
   static void create(T&, MemResourceBase*, size_t) {}
 
-  static void createPolymorphic(T&, MemResourceBase*, PolymorphicHandlerBase&)
+  static void createPolymorphic(T&,
+                                MemResourceBase*,
+                                const std::shared_ptr<PolymorphicHandlerBase>&)
   {
   }
 
   static void destroy(T&, MemResourceBase*, size_t) {}
 
-  static void destroyPolymorphic(T&, MemResourceBase*, PolymorphicHandlerBase&)
+  static void destroyPolymorphic(T&,
+                                 MemResourceBase*,
+                                 const std::shared_ptr<PolymorphicHandlerBase>&)
   {
   }
   // LCOV_EXCL_STOP
-};
-
-// this class is used by NonPtrManager
-struct NoRTTI
-{
-  template<typename TBase>
-  static size_t get(TBase&)
-  {
-    return 0;
-  }
-
-  template<typename TBase>
-  static constexpr size_t get()
-  {
-    return 0;
-  }
-
-  template<typename TBase, typename TDerived>
-  static constexpr TDerived* cast(TBase* obj)
-  {
-    static_assert(!std::is_pointer<TDerived>::value, "");
-    return dynamic_cast<TDerived*>(obj);
-  }
-
-  template<typename TBase>
-  static constexpr bool isPolymorphic()
-  {
-    return false;
-  }
 };
 
 }
@@ -179,30 +154,33 @@ using PointerOwnerBase =
                                             PolymorphicContext,
                                             RTTI>;
 
-using PointerOwner = PointerOwnerBase<StandardRTTI>;
-
-using PointerObserver =
+template<typename RTTI>
+using PointerObserverBase =
   pointer_utils::PointerObjectExtensionBase<pointer_details::PtrObserverManager,
                                             PolymorphicContext,
-                                            pointer_details::NoRTTI>;
+                                            RTTI>;
 
 // inherit from PointerObjectExtensionBase in order to specify
 // PointerType::NotNull
-class ReferencedByPointer
+template<typename RTTI>
+class ReferencedByPointerBase
   : public pointer_utils::PointerObjectExtensionBase<
       pointer_details::NonPtrManager,
       PolymorphicContext,
-      pointer_details::NoRTTI>
+      RTTI>
 {
 public:
-  ReferencedByPointer()
+  ReferencedByPointerBase()
     : pointer_utils::PointerObjectExtensionBase<pointer_details::NonPtrManager,
                                                 PolymorphicContext,
-                                                pointer_details::NoRTTI>(
-        PointerType::NotNull)
+                                                RTTI>(PointerType::NotNull)
   {
   }
 };
+
+using PointerOwner = PointerOwnerBase<StandardRTTI>;
+using PointerObserver = PointerObserverBase<StandardRTTI>;
+using ReferencedByPointer = ReferencedByPointerBase<StandardRTTI>;
 
 }
 
@@ -219,8 +197,8 @@ struct ExtensionTraits<ext::PointerOwnerBase<RTTI>, T*>
     !RTTI::template isPolymorphic<TValue>();
 };
 
-template<typename T>
-struct ExtensionTraits<ext::PointerObserver, T*>
+template<typename T, typename RTTI>
+struct ExtensionTraits<ext::PointerObserverBase<RTTI>, T*>
 {
   // although pointer observer doesn't serialize anything, but we still add
   // value overload support to be consistent with pointer owners observer only
@@ -231,8 +209,8 @@ struct ExtensionTraits<ext::PointerObserver, T*>
   static constexpr bool SupportLambdaOverload = false;
 };
 
-template<typename T>
-struct ExtensionTraits<ext::ReferencedByPointer, T>
+template<typename T, typename RTTI>
+struct ExtensionTraits<ext::ReferencedByPointerBase<RTTI>, T>
 {
   // allow everything, because it is serialized as regular type, except it also
   // creates pointerId that is required by NonOwningPointer to work

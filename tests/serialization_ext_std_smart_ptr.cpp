@@ -23,6 +23,8 @@
 #include <bitsery/ext/inheritance.h>
 #include <bitsery/ext/pointer.h>
 #include <bitsery/ext/std_smart_ptr.h>
+#include <bitsery/traits/string.h>
+#include <bitsery/traits/vector.h>
 
 #include "serialization_test_utils.h"
 #include <gmock/gmock.h>
@@ -75,6 +77,27 @@ serialize(S& s, Derived& o)
 {
   s.ext(o, VirtualBaseClass<Base>{});
   s.value1b(o.y);
+}
+
+struct DerivedSibling : virtual Base
+{
+  uint32_t y{};
+
+  DerivedSibling() = default;
+
+  DerivedSibling(uint8_t x_, uint32_t y_)
+  {
+    x = x_;
+    y = y_;
+  }
+};
+
+template<typename S>
+void
+serialize(S& s, DerivedSibling& o)
+{
+  s.ext(o, VirtualBaseClass<Base>{});
+  s.value4b(o.y);
 }
 
 struct MoreDerived : Derived
@@ -739,6 +762,103 @@ TEST_F(SerializeExtensionStdSmartSharedPtr,
   EXPECT_THAT(baseRes1.use_count(), Eq(1));
   clearSharedState();
   EXPECT_THAT(baseRes1.use_count(), Eq(0));
+}
+
+struct MightMatchVecLayout
+{
+  size_t begin;
+  size_t end;
+};
+
+template<typename S>
+void
+serialize(S& s, MightMatchVecLayout& o)
+{
+  s.template value<sizeof(size_t)>(o.begin);
+  s.template value<sizeof(size_t)>(o.end);
+}
+
+TEST_F(SerializeExtensionStdSmartSharedPtr,
+       NonPolymorphicObservedPointerMustMatchActuallyDeserializedObjectType)
+{
+  std::shared_ptr<std::vector<uint8_t>> baseData1{ new std::vector<uint8_t>{
+    'a', 'b', 'c' } };
+  std::shared_ptr<MightMatchVecLayout> baseData2{ new MightMatchVecLayout{
+    1, 2 } };
+  auto& ser = createSerializer();
+  ser.ext(baseData1, StdSmartPtr{}, [](auto& ser, std::vector<uint8_t>& o) {
+    ser.container1b(o, 100);
+  });
+  ser.ext(baseData2, StdSmartPtr{});
+  // hack a buffer, so that during deserialization we would point to already
+  // deserialized object
+  sctx.buf[5] = 0x01;
+
+  std::shared_ptr<std::vector<uint8_t>> baseRes1{};
+  std::shared_ptr<MightMatchVecLayout> baseRes2{};
+  auto& des = createDeserializer();
+  des.ext(baseRes1, StdSmartPtr{}, [](auto& ser, std::vector<uint8_t>& o) {
+    ser.container1b(o, 100);
+  });
+  // if we would blindly trust the input (that the object is already
+  // deserialized), we would end up
+  // using memory of that object. In this case, we will get internal
+  // representation of std::vector.
+  // If this object is available to attacker, he'll be able to see leaked
+  // address of that object,
+  // allowing him to bypass ASLR.
+  des.ext(baseRes2, StdSmartPtr{});
+
+  EXPECT_THAT(baseRes2.get(), ::testing::IsNull());
+  auto err = des.adapter().error();
+  EXPECT_THAT(err, Eq(bitsery::ReaderError::InvalidPointer));
+  EXPECT_TRUE(isPointerContextValid());
+}
+
+TEST_F(
+  SerializeExtensionStdSmartSharedPtr,
+  PolymorphicObservedPointerMustBeInInheritanceChainOfActuallyDeserializedObjectType1)
+{
+  std::shared_ptr<Base> baseData1{ new MoreDerived{ 3, 7, 10 } };
+  std::shared_ptr<Base> baseData2{};
+  baseData2 = baseData1;
+  auto& ser = createSerializer();
+  ser.ext(baseData1, StdSmartPtr{});
+  ser.ext(baseData2, StdSmartPtr{});
+
+  std::shared_ptr<Base> baseRes1{};
+  std::shared_ptr<Derived> baseRes2{};
+  auto& des = createDeserializer();
+  des.ext(baseRes1, StdSmartPtr{});
+  des.ext(baseRes2, StdSmartPtr{});
+
+  EXPECT_THAT(baseRes2.get(), ::testing::NotNull());
+  auto err = des.adapter().error();
+  EXPECT_THAT(err, Eq(bitsery::ReaderError::NoError));
+  EXPECT_TRUE(isPointerContextValid());
+}
+
+TEST_F(
+  SerializeExtensionStdSmartSharedPtr,
+  PolymorphicObservedPointerMustBeInInheritanceChainOfActuallyDeserializedObjectType2)
+{
+  std::shared_ptr<Base> baseData1{ new MoreDerived{ 3, 7, 10 } };
+  std::shared_ptr<Base> baseData2{};
+  baseData2 = baseData1;
+  auto& ser = createSerializer();
+  ser.ext(baseData1, StdSmartPtr{});
+  ser.ext(baseData2, StdSmartPtr{});
+
+  std::shared_ptr<Base> baseRes1{};
+  std::shared_ptr<DerivedSibling> baseRes2{};
+  auto& des = createDeserializer();
+  des.ext(baseRes1, StdSmartPtr{});
+  des.ext(baseRes2, StdSmartPtr{});
+
+  EXPECT_THAT(baseRes2.get(), ::testing::IsNull());
+  auto err = des.adapter().error();
+  EXPECT_THAT(err, Eq(bitsery::ReaderError::InvalidPointer));
+  EXPECT_TRUE(isPointerContextValid());
 }
 
 struct TestSharedFromThis

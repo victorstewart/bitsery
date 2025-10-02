@@ -198,10 +198,27 @@ struct SmartPtrOwnerManager
     state.obj = std::shared_ptr<TElement>(obj);
   }
 
+  static void saveToSharedStatePolymorphic(TSharedState& state, T& obj)
+  {
+    state.obj = std::shared_ptr<TElement>(obj);
+  }
+
   static void loadFromSharedState(TSharedState& state, T& obj)
   {
     // reinterpret_pointer_cast is only since c++17
-    auto p = reinterpret_cast<TElement*>(state.obj.get());
+    auto v = state.obj.get();
+    auto p = reinterpret_cast<TElement*>(v);
+    obj = std::shared_ptr<TElement>(state.obj, p);
+  }
+
+  static void loadFromSharedStatePolymorphic(TSharedState& state, T& obj)
+  {
+    // TODO Fix pointer addresses in case objects are deserialized using
+    // different bases
+
+    // reinterpret_pointer_cast is only since c++17
+    auto v = state.obj.get();
+    auto p = reinterpret_cast<TElement*>(v);
     obj = std::shared_ptr<TElement>(state.obj, p);
   }
 };
