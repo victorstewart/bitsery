@@ -149,12 +149,10 @@ struct PolymorphicBaseClass<Base>
   : PolymorphicDerivedClasses<Derived1, Derived2>
 {};
 
-// this is commented on purpose, to test scenario when base class is registered
-// (Base) but using instance of Derived1 which is not registered as base
-//        template<>
-//        struct PolymorphicBaseClass<Derived1> :
-//        PolymorphicDerivedClasses<MultipleVirtualInheritance> {
-//        };
+template<>
+struct PolymorphicBaseClass<Derived1>
+  : PolymorphicDerivedClasses<MultipleVirtualInheritance>
+{};
 
 template<>
 struct PolymorphicBaseClass<Derived2>
@@ -410,8 +408,7 @@ TEST_F(SerializeExtensionPointerPolymorphicTypes,
               Eq(bitsery::ReaderError::InvalidPointer));
 }
 
-TEST_F(SerializeExtensionPointerPolymorphicTypes,
-       OwnerIsStaticallyCastToObserverType)
+TEST_F(SerializeExtensionPointerPolymorphicTypes, OwnerIsCastObserverType)
 {
 
   MultipleVirtualInheritance md{ 1, 2, 3, 4 };

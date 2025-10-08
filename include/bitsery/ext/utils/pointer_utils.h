@@ -56,6 +56,7 @@ namespace pointer_utils {
 // this class is used to store context for shared ptr owners
 struct PointerSharedStateBase
 {
+  size_t typeId{};
   virtual ~PointerSharedStateBase() = default;
 };
 
@@ -541,10 +542,10 @@ private:
     } else {
       deserializedTypeId = ptrInfo.ownerTypeId;
     }
-
-    if (canAssignToBase(baseTypeId, deserializedTypeId, ctx)) {
+    if (auto hndl =
+          ctx.getPolymorphicHandler(baseTypeId, ptrInfo.sharedState->typeId)) {
       TPtrManager<T>::loadFromSharedStatePolymorphic(
-        getSharedStateObj<T>(ptrInfo), obj);
+        getSharedStateObj<T>(ptrInfo), obj, **hndl);
       processObserverListPolymorphic(des, ptrInfo, ctx);
     } else {
       des.adapter().error(ReaderError::InvalidPointer);
@@ -643,34 +644,15 @@ private:
       RTTI::template get<typename TPtrManager<T>::TElement>();
     void*(&ptr) = reinterpret_cast<void*&>(TPtrManager<T>::getPtrRef(obj));
     if (ptrInfo.ownerPtr) {
-      if (canAssignToBase(baseTypeId, ptrInfo.ownerTypeId, ctx)) {
-        // TODO cast from one ptr to another
-        ptr = ptrInfo.ownerPtr;
+      if (auto hndl =
+            ctx.getPolymorphicHandler(baseTypeId, ptrInfo.ownerTypeId)) {
+        ptr = hndl->get()->fromDerivedToBasePtr(ptrInfo.ownerPtr);
       } else {
         des.adapter().error(ReaderError::InvalidPointer);
       }
     } else {
       ptrInfo.observersList.emplace_back(ObserverRef{ ptr, baseTypeId });
     }
-  }
-
-  // check if actual deserialized type can be assigned to the base type
-  // (statically typed)
-  bool canAssignToBase(size_t baseTypeId,
-                       size_t deserializedTypeId,
-                       const TPolymorphicContext<RTTI>& ctx) const
-  {
-    if (baseTypeId == deserializedTypeId)
-      return true;
-    auto bases = ctx.getDirectBases(deserializedTypeId);
-    if (bases) {
-      for (auto typeId : *bases) {
-        if (canAssignToBase(baseTypeId, typeId, ctx)) {
-          return true;
-        }
-      }
-    }
-    return false;
   }
 
   template<typename Des>
@@ -696,9 +678,9 @@ private:
   {
     assert(ptrInfo.ownershipType != PointerOwnershipType::Observer);
     for (auto& o : ptrInfo.observersList) {
-      if (canAssignToBase(o.baseTypeId, ptrInfo.ownerTypeId, ctx)) {
-        // TODO cast from one ptr to another
-        o.obj.get() = ptrInfo.ownerPtr;
+      if (auto hndl =
+            ctx.getPolymorphicHandler(o.baseTypeId, ptrInfo.ownerTypeId)) {
+        o.obj.get() = hndl->get()->fromDerivedToBasePtr(ptrInfo.ownerPtr);
       } else {
         des.adapter().error(ReaderError::InvalidPointer);
       }

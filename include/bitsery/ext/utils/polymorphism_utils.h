@@ -76,6 +76,8 @@ public:
 
   virtual void* getRootPtr(const void* obj) const = 0;
 
+  virtual void* fromDerivedToBasePtr(void* obj) const = 0;
+
   virtual size_t getDerivedTypeId() const = 0;
 
   virtual ~PolymorphicHandlerBase() = default;
@@ -110,6 +112,8 @@ public:
     return RTTI::template cast<TBase, TRoot>(
       static_cast<TBase*>(const_cast<void*>(obj)));
   }
+
+  void* fromDerivedToBasePtr(void* obj) const final { return toBase(obj); }
 
   size_t getDerivedTypeId() const final
   {
@@ -154,6 +158,12 @@ public:
     return nullptr;
   }
 
+  void* fromDerivedToBasePtr(void*) const final
+  {
+    assert(false);
+    return nullptr;
+  }
+
   size_t getDerivedTypeId() const { return RTTI::template get<TDerived>(); };
 };
 
@@ -188,12 +198,11 @@ private:
            typename TRoot,
            typename TBase,
            typename TDerived>
-  void add(size_t depth)
+  void add()
   {
-    addToMap<TSerializer, TRoot, TBase, TDerived>(depth == 1,
-                                                  std::is_abstract<TDerived>{});
+    addToMap<TSerializer, TRoot, TBase, TDerived>(std::is_abstract<TDerived>{});
     addChilds<TSerializer, THierarchy, TRoot, TBase, TDerived>(
-      depth + 1, typename THierarchy<TDerived>::Childs{});
+      typename THierarchy<TDerived>::Childs{});
   }
 
   template<typename TSerializer,
@@ -204,15 +213,15 @@ private:
            typename TDerived,
            typename T1,
            typename... Tn>
-  void addChilds(size_t depth, PolymorphicClassesList<T1, Tn...>)
+  void addChilds(PolymorphicClassesList<T1, Tn...>)
   {
     static_assert(std::is_base_of<TDerived, T1>::value,
                   "PolymorphicBaseClass<TBase> must derive a list of derived "
                   "classes from TBase.");
-    add<TSerializer, THierarchy, TRoot, TBase, T1>(depth);
+    add<TSerializer, THierarchy, TRoot, TBase, T1>();
     addChilds<TSerializer, THierarchy, TRoot, TBase, TDerived>(
-      depth, PolymorphicClassesList<Tn...>{});
-    add<TSerializer, THierarchy, TRoot, T1, T1>(0);
+      PolymorphicClassesList<Tn...>{});
+    add<TSerializer, THierarchy, TRoot, T1, T1>();
   }
 
   template<typename TSerializer,
@@ -221,7 +230,7 @@ private:
            typename TRoot,
            typename TBase,
            typename TDerived>
-  void addChilds(size_t, PolymorphicClassesList<>)
+  void addChilds(PolymorphicClassesList<>)
   {
   }
 
@@ -229,7 +238,7 @@ private:
            typename TRoot,
            typename TBase,
            typename TDerived>
-  void addToMap(bool directBase, std::false_type)
+  void addToMap(std::false_type)
   {
     using THandler =
       PolymorphicHandler<RTTI, TSerializer, TRoot, TBase, TDerived>;
@@ -256,25 +265,13 @@ private:
       }
       it->second.push_back(key.derivedHash);
     }
-    if (directBase) {
-      auto it = _derivedToBaseArray.find(key.derivedHash);
-      if (it == _derivedToBaseArray.end()) {
-        it = _derivedToBaseArray
-               .emplace(std::piecewise_construct,
-                        std::forward_as_tuple(key.derivedHash),
-                        std::forward_as_tuple(
-                          pointer_utils::StdPolyAlloc<size_t>{ _memResource }))
-               .first;
-      }
-      it->second.push_back(key.baseHash);
-    }
   }
 
   template<typename TSerializer,
            typename TRoot,
            typename TBase,
            typename TDerived>
-  void addToMap(bool directBase, std::true_type)
+  void addToMap(std::true_type)
   {
     using THandler = AbstractPolymorphicHandler<RTTI, TRoot, TBase, TDerived>;
     BaseToDerivedKey key{ RTTI::template get<TBase>(),
@@ -288,19 +285,7 @@ private:
         alloc.deallocate(data, 1);
       },
       alloc);
-    _baseToDerivedMap.emplace(key, std::move(handler)).second;
-    if (directBase) {
-      auto it = _derivedToBaseArray.find(key.derivedHash);
-      if (it == _derivedToBaseArray.end()) {
-        it = _derivedToBaseArray
-               .emplace(std::piecewise_construct,
-                        std::forward_as_tuple(key.derivedHash),
-                        std::forward_as_tuple(
-                          pointer_utils::StdPolyAlloc<size_t>{ _memResource }))
-               .first;
-      }
-      it->second.push_back(key.baseHash);
-    }
+    _baseToDerivedMap.emplace(key, std::move(handler));
   }
 
   MemResourceBase* _memResource;
@@ -328,17 +313,6 @@ private:
                 std::vector<size_t, pointer_utils::StdPolyAlloc<size_t>>>>>
     _baseToDerivedArray;
 
-  // Used to iterate through hierarchy chain from most derived to the base(s)
-  std::unordered_map<
-    size_t,
-    std::vector<size_t, pointer_utils::StdPolyAlloc<size_t>>,
-    std::hash<size_t>,
-    std::equal_to<size_t>,
-    pointer_utils::StdPolyAlloc<
-      std::pair<const size_t,
-                std::vector<size_t, pointer_utils::StdPolyAlloc<size_t>>>>>
-    _derivedToBaseArray;
-
 public:
   explicit PolymorphicContext(MemResourceBase* memResource = nullptr)
     : _memResource{ memResource }
@@ -349,11 +323,6 @@ public:
         std::pair<const size_t,
                   std::vector<size_t, pointer_utils::StdPolyAlloc<size_t>>>>{
         memResource } }
-    , _derivedToBaseArray{ pointer_utils::StdPolyAlloc<
-        std::pair<const size_t,
-                  std::vector<size_t, pointer_utils::StdPolyAlloc<size_t>>>>{
-        memResource } }
-
   {
   }
 
@@ -379,7 +348,7 @@ public:
            typename... Tn>
   void registerBasesList(PolymorphicClassesList<T1, Tn...>)
   {
-    add<TSerializer, THierarchy, T1, T1, T1>(0);
+    add<TSerializer, THierarchy, T1, T1, T1>();
     registerBasesList<TSerializer, THierarchy>(PolymorphicClassesList<Tn...>{});
   }
 
@@ -464,15 +433,16 @@ public:
     return it->second;
   }
 
-  const std::vector<size_t, pointer_utils::StdPolyAlloc<size_t>>*
-  getDirectBases(size_t derivedTypeId) const
+  const std::shared_ptr<PolymorphicHandlerBase>* getPolymorphicHandler(
+    size_t baseTypeId,
+    size_t derivedTypeId) const
   {
-    auto it = _derivedToBaseArray.find(derivedTypeId);
-    if (it != _derivedToBaseArray.end()) {
-      return &it->second;
-    } else {
+    auto it =
+      _baseToDerivedMap.find(BaseToDerivedKey{ baseTypeId, derivedTypeId });
+    if (it == _baseToDerivedMap.end()) {
       return nullptr;
     }
+    return &it->second;
   }
 };
 
