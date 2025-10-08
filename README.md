@@ -102,9 +102,13 @@ Works with C++11 compiler, no additional dependencies, include `<bitsery/bitsery
 
 Library is tested on all major compilers on Windows, Linux and macOS.
 
-There is a patch that allows using bitsery with non-fully compatible C++11 compilers.
-* CentOS 7 with gcc 4.8.2.
-
 ## License
 
 **bitsery** is licensed under the [MIT license](LICENSE).
+
+## 💖 Sponsor Me?
+
+If you find this project useful or interesting, or just want to say thanks, you can buy me a coffee!
+Your support keeps me motivated to maintaining and improving this project.
+
+[**Thank you!**](https://github.com/sponsors/fraillt)
