@@ -371,3 +371,63 @@ TEST_F(SerializeExtensionPointerPolymorphicTypes,
   EXPECT_THAT(sctx.des->adapter().error(),
               Eq(bitsery::ReaderError::InvalidPointer));
 }
+
+TEST_F(SerializeExtensionPointerPolymorphicTypes,
+       SameObjectIsCorrectlyIdentifiedEvenIfObserverHasDifferentBase)
+{
+
+  MultipleVirtualInheritance md;
+  Derived2* derivedData = &md;
+  EXPECT_THAT(static_cast<void*>(&md),
+              ::testing::Ne(static_cast<void*>(derivedData)));
+
+  auto& ser = createSerializer();
+  ser.ext(md, ReferencedByPointer{});
+  ser.ext(derivedData, PointerObserver{});
+  EXPECT_THAT(isPointerContextValid(), Eq(true));
+}
+
+TEST_F(SerializeExtensionPointerPolymorphicTypes,
+       CheckIfOwnerTypeIsAssignableToObserverType)
+{
+
+  MultipleVirtualInheritance md;
+  Derived2* derivedData = &md;
+
+  auto& ser = createSerializer();
+  ser.ext(&md, PointerOwner{});
+  ser.ext(derivedData, PointerObserver{});
+
+  MultipleVirtualInheritance* res1 = nullptr;
+  NoRelationshipSpecifiedDerived* res2 = nullptr;
+  auto& des = createDeserializer();
+  des.ext(res1, PointerOwner{});
+  des.ext(res2, PointerObserver{});
+
+  EXPECT_THAT(res1, ::testing::NotNull());
+  EXPECT_THAT(res2, ::testing::IsNull());
+  EXPECT_THAT(sctx.des->adapter().error(),
+              Eq(bitsery::ReaderError::InvalidPointer));
+}
+
+TEST_F(SerializeExtensionPointerPolymorphicTypes,
+       OwnerIsStaticallyCastToObserverType)
+{
+
+  MultipleVirtualInheritance md{ 1, 2, 3, 4 };
+  Derived2* derivedData = &md;
+
+  auto& ser = createSerializer();
+  ser.ext(&md, PointerOwner{});
+  ser.ext(derivedData, PointerObserver{});
+
+  MultipleVirtualInheritance* res1 = nullptr;
+  Base* res2 = nullptr;
+  auto& des = createDeserializer();
+  des.ext(res1, PointerOwner{});
+  des.ext(res2, PointerObserver{});
+
+  EXPECT_THAT(res1, ::testing::NotNull());
+  EXPECT_THAT(res2, ::testing::NotNull());
+  EXPECT_THAT(res2->x, Eq(1));
+}

@@ -135,20 +135,20 @@ template<typename RTTI, typename TRoot, typename TBase, typename TDerived>
 class AbstractPolymorphicHandler : public PolymorphicHandlerBase
 {
 public:
-  void* create(const pointer_utils::PolyAllocWithTypeId& alloc) const
+  void* create(const pointer_utils::PolyAllocWithTypeId&) const
   {
     assert(false);
     return nullptr;
   }
 
-  void destroy(const pointer_utils::PolyAllocWithTypeId& alloc, void* ptr) const
+  void destroy(const pointer_utils::PolyAllocWithTypeId&, void*) const
   {
     assert(false);
   };
 
-  void process(void* ser, void* obj) const { assert(false); }
+  void process(void*, void*) const { assert(false); }
 
-  void* getRootPtr(const void* obj) const
+  void* getRootPtr(const void*) const
   {
     assert(false);
     return nullptr;
