@@ -43,6 +43,9 @@ enum class ReaderError
 
 namespace details {
 
+template <typename>
+struct always_false : std::false_type {};
+
 /**
  * size read/write functions
  */
@@ -304,6 +307,15 @@ struct OutputAdapterBaseCRTP
       std::is_void<T>::value,
       "Bit-packing is not enabled.\nEnable by call to `enableBitPacking`) or "
       "create Serializer with bit packing enabled.");
+  }
+
+  template <size_t ALIGNMENT>
+  uint8_t* allocateForDirectWrite(size_t size)
+  {
+    static_assert(details::always_false<Adapter>::value,
+                  "allocateForDirectWrite is not supported by this adapter");
+    (void)size;
+    return nullptr;
   }
 
   void align() {}
