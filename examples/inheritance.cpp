@@ -95,14 +95,12 @@ namespace bitsery {
 // and Derived2 member fnc we need explicitly select which function to use
 template<>
 struct SelectSerializeFnc<Derived2> : UseMemberFnc
-{
-};
+{};
 
 // multiple inheritance has non-member serialize function defined
 template<>
 struct SelectSerializeFnc<MultipleInheritance> : UseNonMemberFnc
-{
-};
+{};
 }
 
 // some helper types

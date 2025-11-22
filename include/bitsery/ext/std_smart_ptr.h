@@ -147,6 +147,7 @@ struct SmartPtrOwnerManager
       [alloc, typeId](TElement* data) { alloc.deleteObject(data, typeId); },
       pointer_utils::StdPolyAlloc<TElement>(memResource));
     state.obj = obj;
+    state.typeId = typeId;
   }
 
   static void createSharedPolymorphic(
@@ -162,6 +163,7 @@ struct SmartPtrOwnerManager
       [alloc, handler](TElement* data) { handler->destroy(alloc, data); },
       pointer_utils::StdPolyAlloc<TElement>(memResource));
     state.obj = obj;
+    state.typeId = handler->getDerivedTypeId();
   }
 
   static void createShared(TSharedState& state,
@@ -176,6 +178,7 @@ struct SmartPtrOwnerManager
       pointer_utils::StdPolyAlloc<TElement>(memResource));
     obj = res;
     state.obj = res;
+    state.typeId = typeId;
   }
 
   static void createSharedPolymorphic(
@@ -191,6 +194,7 @@ struct SmartPtrOwnerManager
       pointer_utils::StdPolyAlloc<TElement>(memResource));
     obj = res;
     state.obj = res;
+    state.typeId = handler->getDerivedTypeId();
   }
 
   static void saveToSharedState(TSharedState& state, T& obj)
@@ -198,10 +202,24 @@ struct SmartPtrOwnerManager
     state.obj = std::shared_ptr<TElement>(obj);
   }
 
+  static void saveToSharedStatePolymorphic(TSharedState& state, T& obj)
+  {
+    state.obj = std::shared_ptr<TElement>(obj);
+  }
+
   static void loadFromSharedState(TSharedState& state, T& obj)
   {
-    // reinterpret_pointer_cast is only since c++17
-    auto p = reinterpret_cast<TElement*>(state.obj.get());
+    auto v = state.obj.get();
+    auto p = static_cast<TElement*>(v);
+    obj = std::shared_ptr<TElement>(state.obj, p);
+  }
+
+  static void loadFromSharedStatePolymorphic(TSharedState& state,
+                                             T& obj,
+                                             const PolymorphicHandlerBase&)
+  {
+    auto v = state.obj.get();
+    auto p = static_cast<TElement*>(v);
     obj = std::shared_ptr<TElement>(state.obj, p);
   }
 };

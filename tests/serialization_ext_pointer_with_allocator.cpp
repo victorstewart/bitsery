@@ -152,14 +152,12 @@ namespace ext {
 template<>
 struct PolymorphicBaseClass<Base>
   : PolymorphicDerivedClasses<Derived1, Derived2>
-{
-};
+{};
 
 template<>
 struct PolymorphicBaseClass<PolyPtrWithPolyPtrBase>
   : PolymorphicDerivedClasses<DerivedPolyPtrWithPolyPtr>
-{
-};
+{};
 
 }
 }

@@ -62,8 +62,7 @@ struct NotDefinedType
 template<typename T>
 struct IsDefined
   : public std::integral_constant<bool, !std::is_same<NotDefinedType, T>::value>
-{
-};
+{};
 }
 }
 

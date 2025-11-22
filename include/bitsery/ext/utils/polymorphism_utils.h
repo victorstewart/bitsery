@@ -35,8 +35,7 @@ namespace ext {
 // helper type, that contains list of types
 template<typename...>
 struct PolymorphicClassesList
-{
-};
+{};
 
 // specialize for your base class by deriving from PolymorphicDerivedClasses
 // with list of derivatives that DIRECTLY inherits from your base class.
@@ -75,10 +74,20 @@ public:
 
   virtual void process(void* ser, void* obj) const = 0;
 
+  virtual void* getRootPtr(const void* obj) const = 0;
+
+  virtual void* fromDerivedToBasePtr(void* obj) const = 0;
+
+  virtual size_t getDerivedTypeId() const = 0;
+
   virtual ~PolymorphicHandlerBase() = default;
 };
 
-template<typename RTTI, typename TSerializer, typename TBase, typename TDerived>
+template<typename RTTI,
+         typename TSerializer,
+         typename TRoot,
+         typename TBase,
+         typename TDerived>
 class PolymorphicHandler : public PolymorphicHandlerBase
 {
 public:
@@ -98,6 +107,19 @@ public:
     static_cast<TSerializer*>(ser)->object(*fromBase(obj));
   }
 
+  void* getRootPtr(const void* obj) const final
+  {
+    return RTTI::template cast<TBase, TRoot>(
+      static_cast<TBase*>(const_cast<void*>(obj)));
+  }
+
+  void* fromDerivedToBasePtr(void* obj) const final { return toBase(obj); }
+
+  size_t getDerivedTypeId() const final
+  {
+    return RTTI::template get<TDerived>();
+  }
+
 private:
   TDerived* fromBase(void* obj) const
   {
@@ -108,6 +130,41 @@ private:
   {
     return RTTI::template cast<TDerived, TBase>(static_cast<TDerived*>(obj));
   }
+};
+
+// Even though we don't serialize/deserialize abstract classes
+// object might still be accessed through abstract class, hence we need this
+// for type information
+template<typename RTTI, typename TRoot, typename TBase, typename TDerived>
+class AbstractPolymorphicHandler : public PolymorphicHandlerBase
+{
+public:
+  void* create(const pointer_utils::PolyAllocWithTypeId&) const
+  {
+    assert(false);
+    return nullptr;
+  }
+
+  void destroy(const pointer_utils::PolyAllocWithTypeId&, void*) const
+  {
+    assert(false);
+  };
+
+  void process(void*, void*) const { assert(false); }
+
+  void* getRootPtr(const void*) const
+  {
+    assert(false);
+    return nullptr;
+  }
+
+  void* fromDerivedToBasePtr(void*) const final
+  {
+    assert(false);
+    return nullptr;
+  }
+
+  size_t getDerivedTypeId() const { return RTTI::template get<TDerived>(); };
 };
 
 template<typename RTTI>
@@ -138,18 +195,20 @@ private:
   template<typename TSerializer,
            template<typename>
            class THierarchy,
+           typename TRoot,
            typename TBase,
            typename TDerived>
   void add()
   {
-    addToMap<TSerializer, TBase, TDerived>(std::is_abstract<TDerived>{});
-    addChilds<TSerializer, THierarchy, TBase, TDerived>(
+    addToMap<TSerializer, TRoot, TBase, TDerived>(std::is_abstract<TDerived>{});
+    addChilds<TSerializer, THierarchy, TRoot, TBase, TDerived>(
       typename THierarchy<TDerived>::Childs{});
   }
 
   template<typename TSerializer,
            template<typename>
            class THierarchy,
+           typename TRoot,
            typename TBase,
            typename TDerived,
            typename T1,
@@ -159,26 +218,30 @@ private:
     static_assert(std::is_base_of<TDerived, T1>::value,
                   "PolymorphicBaseClass<TBase> must derive a list of derived "
                   "classes from TBase.");
-    add<TSerializer, THierarchy, TBase, T1>();
-    addChilds<TSerializer, THierarchy, TBase, TDerived>(
+    add<TSerializer, THierarchy, TRoot, TBase, T1>();
+    addChilds<TSerializer, THierarchy, TRoot, TBase, TDerived>(
       PolymorphicClassesList<Tn...>{});
-    // iterate through derived class hierarchy as well
-    add<TSerializer, THierarchy, T1, T1>();
+    add<TSerializer, THierarchy, TRoot, T1, T1>();
   }
 
   template<typename TSerializer,
            template<typename>
            class THierarchy,
+           typename TRoot,
            typename TBase,
            typename TDerived>
   void addChilds(PolymorphicClassesList<>)
   {
   }
 
-  template<typename TSerializer, typename TBase, typename TDerived>
+  template<typename TSerializer,
+           typename TRoot,
+           typename TBase,
+           typename TDerived>
   void addToMap(std::false_type)
   {
-    using THandler = PolymorphicHandler<RTTI, TSerializer, TBase, TDerived>;
+    using THandler =
+      PolymorphicHandler<RTTI, TSerializer, TRoot, TBase, TDerived>;
     BaseToDerivedKey key{ RTTI::template get<TBase>(),
                           RTTI::template get<TDerived>() };
     pointer_utils::StdPolyAlloc<THandler> alloc{ _memResource };
@@ -204,10 +267,25 @@ private:
     }
   }
 
-  template<typename TSerializer, typename TBase, typename TDerived>
+  template<typename TSerializer,
+           typename TRoot,
+           typename TBase,
+           typename TDerived>
   void addToMap(std::true_type)
   {
-    // cannot add abstract class
+    using THandler = AbstractPolymorphicHandler<RTTI, TRoot, TBase, TDerived>;
+    BaseToDerivedKey key{ RTTI::template get<TBase>(),
+                          RTTI::template get<TDerived>() };
+    pointer_utils::StdPolyAlloc<THandler> alloc{ _memResource };
+    auto ptr = alloc.allocate(1);
+    std::shared_ptr<THandler> handler(
+      new (ptr) THandler{},
+      [alloc](THandler* data) mutable {
+        data->~THandler();
+        alloc.deallocate(data, 1);
+      },
+      alloc);
+    _baseToDerivedMap.emplace(key, std::move(handler));
   }
 
   MemResourceBase* _memResource;
@@ -270,25 +348,13 @@ public:
            typename... Tn>
   void registerBasesList(PolymorphicClassesList<T1, Tn...>)
   {
-    add<TSerializer, THierarchy, T1, T1>();
+    add<TSerializer, THierarchy, T1, T1, T1>();
     registerBasesList<TSerializer, THierarchy>(PolymorphicClassesList<Tn...>{});
   }
 
   template<typename TSerializer, template<typename> class THierarchy>
   void registerBasesList(PolymorphicClassesList<>)
   {
-  }
-
-  // optional method, in case you want to construct base class hierarchy your
-  // self
-  template<typename TSerializer, typename TBase, typename TDerived>
-  void registerSingleBaseBranch()
-  {
-    static_assert(std::is_base_of<TBase, TDerived>::value,
-                  "TDerived must be derived from TBase");
-    static_assert(!std::is_abstract<TDerived>::value,
-                  "TDerived cannot be abstract");
-    addToMap<TSerializer, TBase, TDerived>(std::false_type{});
   }
 
   template<typename Serializer, typename TBase>
@@ -339,7 +405,7 @@ public:
       // if object is null or different type, create new and assign it
       if (obj == nullptr || RTTI::template get<TBase>(*obj) != derivedHash) {
         if (obj) {
-          destroyFnc(getPolymorphicHandler(*obj));
+          destroyFnc(getPolymorphicHandler(obj));
         }
         obj = createFnc(handler);
       }
@@ -350,12 +416,33 @@ public:
 
   template<typename TBase>
   const std::shared_ptr<PolymorphicHandlerBase>& getPolymorphicHandler(
-    TBase& obj) const
+    TBase* obj) const
   {
-    auto deleteHandlerIt = _baseToDerivedMap.find(BaseToDerivedKey{
-      RTTI::template get<TBase>(), RTTI::template get<TBase>(obj) });
-    assert(deleteHandlerIt != _baseToDerivedMap.end());
-    return deleteHandlerIt->second;
+    auto it = _baseToDerivedMap.find(BaseToDerivedKey{
+      RTTI::template get<TBase>(), RTTI::template get<TBase>(*obj) });
+    assert(it != _baseToDerivedMap.end());
+    return it->second;
+  }
+
+  template<typename TBase>
+  const std::shared_ptr<PolymorphicHandlerBase>& getPolymorphicHandler() const
+  {
+    auto it = _baseToDerivedMap.find(BaseToDerivedKey{
+      RTTI::template get<TBase>(), RTTI::template get<TBase>() });
+    assert(it != _baseToDerivedMap.end());
+    return it->second;
+  }
+
+  const std::shared_ptr<PolymorphicHandlerBase>* getPolymorphicHandler(
+    size_t baseTypeId,
+    size_t derivedTypeId) const
+  {
+    auto it =
+      _baseToDerivedMap.find(BaseToDerivedKey{ baseTypeId, derivedTypeId });
+    if (it == _baseToDerivedMap.end()) {
+      return nullptr;
+    }
+    return &it->second;
   }
 };
 

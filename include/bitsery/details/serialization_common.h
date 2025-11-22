@@ -70,24 +70,19 @@ struct FtorExtValue : public Ext
 
 template<typename Ext>
 struct FtorExtValue1b : FtorExtValue<1, Ext>
-{
-};
+{};
 template<typename Ext>
 struct FtorExtValue2b : FtorExtValue<2, Ext>
-{
-};
+{};
 template<typename Ext>
 struct FtorExtValue4b : FtorExtValue<4, Ext>
-{
-};
+{};
 template<typename Ext>
 struct FtorExtValue8b : FtorExtValue<8, Ext>
-{
-};
+{};
 template<typename Ext>
 struct FtorExtValue16b : FtorExtValue<16, Ext>
-{
-};
+{};
 
 template<typename Ext>
 struct FtorExtObject : public Ext
@@ -105,8 +100,7 @@ struct FtorExtObject : public Ext
 // SelectSerializeFnc<MyDerivedClass>:UseMemberFnc {};
 template<typename T>
 struct SelectSerializeFnc : std::integral_constant<int, 0>
-{
-};
+{};
 
 // types you need to inherit from when specializing SelectSerializeFnc class
 struct UseNonMemberFnc : std::integral_constant<int, 1>
@@ -120,20 +114,17 @@ namespace details {
 template<typename T>
 struct IsContainerTraitsDefined
   : public IsDefined<typename traits::ContainerTraits<T>::TValue>
-{
-};
+{};
 
 template<typename T>
 struct IsTextTraitsDefined
   : public IsDefined<typename traits::TextTraits<T>::TValue>
-{
-};
+{};
 
 template<typename Ext, typename T>
 struct IsExtensionTraitsDefined
   : public IsDefined<typename traits::ExtensionTraits<Ext, T>::TValue>
-{
-};
+{};
 
 #ifdef _MSC_VER
 // helper types for HasSerializeFunction
@@ -151,8 +142,7 @@ struct HasSerializeFunctionHelper
 };
 template<typename S, typename T>
 struct HasSerializeFunction : HasSerializeFunctionHelper<S, T>::type
-{
-};
+{};
 
 // helper types for HasSerializeMethod
 template<typename S, typename T>
@@ -169,8 +159,7 @@ struct HasSerializeMethodHelper
 };
 template<typename S, typename T>
 struct HasSerializeMethod : HasSerializeMethodHelper<S, T>::type
-{
-};
+{};
 
 // helper types for IsBriefSyntaxIncluded
 template<typename S, typename T>
@@ -188,8 +177,7 @@ struct IsBriefSyntaxIncludedHelper
 
 template<typename S, typename T>
 struct IsBriefSyntaxIncluded : IsBriefSyntaxIncludedHelper<S, T>::type
-{
-};
+{};
 #else
 // helper metafunction, that is added to c++17
 template<typename... Ts>
@@ -202,8 +190,7 @@ using void_t = typename make_void<Ts...>::type;
 
 template<typename, typename, typename = void>
 struct HasSerializeFunction : std::false_type
-{
-};
+{};
 
 template<typename S, typename T>
 struct HasSerializeFunction<
@@ -211,13 +198,11 @@ struct HasSerializeFunction<
   T,
   void_t<decltype(serialize(std::declval<S&>(), std::declval<T&>()))>>
   : std::true_type
-{
-};
+{};
 
 template<typename, typename, typename = void>
 struct HasSerializeMethod : std::false_type
-{
-};
+{};
 
 template<typename S, typename T>
 struct HasSerializeMethod<
@@ -225,14 +210,12 @@ struct HasSerializeMethod<
   T,
   void_t<decltype(Access::serialize(std::declval<S&>(), std::declval<T&>()))>>
   : std::true_type
-{
-};
+{};
 
 // this solution doesn't work with visual studio, but is more elegant
 template<typename, typename, typename = void>
 struct IsBriefSyntaxIncluded : std::false_type
-{
-};
+{};
 
 template<typename S, typename T>
 struct IsBriefSyntaxIncluded<
@@ -240,8 +223,7 @@ struct IsBriefSyntaxIncluded<
   T,
   void_t<decltype(processBriefSyntax(std::declval<S&>(), std::declval<T&&>()))>>
   : std::true_type
-{
-};
+{};
 #endif
 
 // used for extensions when extension TValue = void
@@ -257,8 +239,7 @@ struct IsFundamentalType
                            std::is_enum<T>::value ||
                              std::is_floating_point<T>::value ||
                              std::is_integral<T>::value>
-{
-};
+{};
 
 template<typename T, typename Integral = void>
 struct IntegralFromFundamental
@@ -372,16 +353,14 @@ struct BriefSyntaxFunction
 
 template<int Index, typename... Conds>
 struct FindIndex : std::integral_constant<int, Index>
-{
-};
+{};
 
 template<int Index, typename Cond, typename... Conds>
 struct FindIndex<Index, Cond, Conds...>
   : std::conditional<Cond::value,
                      std::integral_constant<int, Index>,
                      FindIndex<Index + 1, Conds...>>::type
-{
-};
+{};
 
 template<typename T, typename Tuple>
 struct GetConvertibleTypeIndexFromTuple;
@@ -389,8 +368,7 @@ struct GetConvertibleTypeIndexFromTuple;
 template<typename T, typename... Us>
 struct GetConvertibleTypeIndexFromTuple<T, std::tuple<Us...>>
   : FindIndex<0, std::is_convertible<Us&, T&>...>
-{
-};
+{};
 
 template<typename T, typename Tuple>
 struct IsExistsConvertibleTupleType;
@@ -401,8 +379,7 @@ struct IsExistsConvertibleTupleType<T, std::tuple<Us...>>
       bool,
       GetConvertibleTypeIndexFromTuple<T, std::tuple<Us...>>::value !=
         sizeof...(Us)>
-{
-};
+{};
 
 /*
  * get context from internal or external, and check if it's convertible or not
@@ -549,13 +526,11 @@ protected:
 
 template<typename T, template<typename...> class Template>
 struct IsSpecializationOf : std::false_type
-{
-};
+{};
 
 template<template<typename...> class Template, typename... Args>
 struct IsSpecializationOf<Template<Args...>, Template> : std::true_type
-{
-};
+{};
 
 }
 }

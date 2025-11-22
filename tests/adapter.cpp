@@ -306,8 +306,7 @@ using AdapterInputTypes =
 
 template<typename TConfig>
 class InputAll : public AdapterConfig<TConfig>
-{
-};
+{};
 
 TYPED_TEST_SUITE(InputAll, AdapterInputTypes, );
 
@@ -476,8 +475,7 @@ using AdapterOutputTypes =
 
 template<typename TConfig>
 class OutputAll : public AdapterConfig<TConfig>
-{
-};
+{};
 
 TYPED_TEST_SUITE(OutputAll, AdapterOutputTypes, );
 

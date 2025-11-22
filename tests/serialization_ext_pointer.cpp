@@ -458,6 +458,23 @@ TEST_F(SerializeExtensionPointerDeserialization, PointerObserver)
   EXPECT_THAT(pr3, Eq(&r3));
 }
 
+TEST_F(SerializeExtensionPointerDeserialization,
+       PointerObserverAndOwnerTypeMustBeTheSame)
+{
+  // serialize as if we have two same objects
+  auto& ser = createSerializer();
+  ser.ext2b(d1, ReferencedByPointer{});
+  ser.ext2b(pd1, PointerObserver{});
+  auto& des = createDeserializer();
+  // but actual implementation expects distinct objects
+  des.ext2b(r1, ReferencedByPointer{});
+  des.ext4b(pr2, PointerObserver{});
+
+  EXPECT_THAT(isPointerContextValid(), Eq(true));
+  EXPECT_THAT(sctx1.des->adapter().error(),
+              Eq(bitsery::ReaderError::InvalidPointer));
+}
+
 struct Test1Data
 {
   std::vector<MyStruct1> vdata;

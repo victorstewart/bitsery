@@ -1,3 +1,15 @@
+# [5.2.5](https://github.com/fraillt/bitsery/compare/v5.2.4...v5.2.5) (2025-10-09)
+
+### Bug fixes
+* fix security issue during deserialization where a crafted payload could cause a shared pointer to be assigned to a different type. More information is [here](https://gist.github.com/TrebledJ/750abc64a826f19dd2d6774724629b71). (huge thanks to [Johnathan](https://github.com/TrebledJ))
+* fix serialization of shared polymorphic pointer-like types by correctly identifying same object (e.g. the same object serialized through `Base` or `Derived` would otherwise have different pointer addresses).
+* fix polymorphic type assignment to "observer" by adjusting pointer address.
+* fix spelling of C++ "likely" attribute. #121 (thanks to [Jules](https://github.com/jules-ai))
+
+### Other notes
+* format code that was left unformatted in the previous version.
+* remove broken patch for GCC 4.8.2 (CentOS 7).
+
 # [5.2.4](https://github.com/fraillt/bitsery/compare/v5.2.3...v5.2.4) (2024-07-30)
 
 ### Improvements

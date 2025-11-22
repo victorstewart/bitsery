@@ -156,10 +156,7 @@ struct SwapImpl
     return static_cast<uint16_t>((value & 0x00ff) << 8 | (value & 0xff00) >> 8);
   }
 
-  static uint8_t exec(uint8_t value)
-  {
-    return value;
-  }
+  static uint8_t exec(uint8_t value) { return value; }
 };
 
 template<typename TValue>

@@ -25,7 +25,7 @@
 
 #define BITSERY_MAJOR_VERSION 5
 #define BITSERY_MINOR_VERSION 2
-#define BITSERY_PATCH_VERSION 4
+#define BITSERY_PATCH_VERSION 5
 
 #define BITSERY_QUOTE_MACRO(name) #name
 #define BITSERY_BUILD_VERSION_STR(major, minor, patch)                         \
@@ -66,7 +66,7 @@
 #endif
 
 #if __has_cpp_attribute(likely)
-#define BITSERY_LIKELY BITSERY_ATTRIBUTE(likey)
+#define BITSERY_LIKELY BITSERY_ATTRIBUTE(likely)
 #else
 #define BITSERY_LIKELY
 #endif

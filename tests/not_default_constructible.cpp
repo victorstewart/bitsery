@@ -320,8 +320,7 @@ namespace ext {
 template<>
 struct PolymorphicBaseClass<PolymorphicNDCBase>
   : PolymorphicDerivedClasses<PolymorphicNDC1, PolymorphicNDC2>
-{
-};
+{};
 }
 }
 

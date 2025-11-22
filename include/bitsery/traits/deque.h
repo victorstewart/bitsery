@@ -33,8 +33,7 @@ namespace traits {
 template<typename T, typename Allocator>
 struct ContainerTraits<std::deque<T, Allocator>>
   : public StdContainer<std::deque<T, Allocator>, true, false>
-{
-};
+{};
 
 }
 

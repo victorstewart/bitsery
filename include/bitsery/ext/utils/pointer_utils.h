@@ -56,6 +56,7 @@ namespace pointer_utils {
 // this class is used to store context for shared ptr owners
 struct PointerSharedStateBase
 {
+  size_t typeId{};
   virtual ~PointerSharedStateBase() = default;
 };
 
@@ -117,16 +118,23 @@ struct PLCInfoSerializer : PLCInfo
   size_t id;
 };
 
+struct ObserverRef
+{
+  std::reference_wrapper<void*> obj;
+  size_t baseTypeId;
+};
+
 struct PLCInfoDeserializer : PLCInfo
 {
   PLCInfoDeserializer(void* ptr,
+                      size_t ownerTypeId_,
                       PointerOwnershipType ownershipType_,
                       MemResourceBase* memResource_)
     : PLCInfo(ownershipType_)
     , ownerPtr{ ptr }
+    , ownerTypeId{ ownerTypeId_ }
     , memResource{ memResource_ }
-    , observersList{ StdPolyAlloc<std::reference_wrapper<void*>>{
-        memResource_ } } {};
+    , observersList{ StdPolyAlloc<ObserverRef>{ memResource_ } } {};
 
   // need to override these explicitly because we have pointer member
   PLCInfoDeserializer(const PLCInfoDeserializer&) = delete;
@@ -137,30 +145,12 @@ struct PLCInfoDeserializer : PLCInfo
 
   PLCInfoDeserializer& operator=(PLCInfoDeserializer&&) = default;
 
-  void processOwner(void* ptr)
-  {
-    ownerPtr = ptr;
-    assert(ownershipType != PointerOwnershipType::Observer);
-    for (auto& o : observersList)
-      o.get() = ptr;
-    observersList.clear();
-    observersList.shrink_to_fit();
-  }
-
-  void processObserver(void*(&ptr))
-  {
-    if (ownerPtr) {
-      ptr = ownerPtr;
-    } else {
-      observersList.emplace_back(ptr);
-    }
-  }
-
   void* ownerPtr;
+  // used for polymorphic types in order to identify
+  // if shared objects can be assigned
+  size_t ownerTypeId;
   MemResourceBase* memResource;
-  std::vector<std::reference_wrapper<void*>,
-              StdPolyAlloc<std::reference_wrapper<void*>>>
-    observersList;
+  std::vector<ObserverRef, StdPolyAlloc<ObserverRef>> observersList;
   std::unique_ptr<PointerSharedStateBase, PointerSharedStateDeleter>
     sharedState{};
 };
@@ -254,8 +244,8 @@ public:
 
   PLCInfoDeserializer& getInfoById(size_t id, PointerOwnershipType ptrType)
   {
-    auto res =
-      _idMap.emplace(id, PLCInfoDeserializer{ nullptr, ptrType, _memResource });
+    auto res = _idMap.emplace(
+      id, PLCInfoDeserializer{ nullptr, 0, ptrType, _memResource });
     auto& ptrInfo = res.first->second;
     if (!res.second)
       ptrInfo.update(ptrType);
@@ -329,8 +319,7 @@ public:
     : std::integral_constant<
         bool,
         RTTI::template isPolymorphic<typename TPtrManager<T>::TElement>()>
-  {
-  };
+  {};
 
   template<PointerOwnershipType Value>
   using OwnershipType = std::integral_constant<PointerOwnershipType, Value>;
@@ -353,8 +342,8 @@ public:
     if (ptr) {
       auto& ctx = ser.template context<
         pointer_utils::PointerLinkingContextSerialization>();
-      auto& ptrInfo =
-        ctx.getInfoByPtr(getBasePtr(ptr), TPtrManager<T>::getOwnership());
+      auto& ptrInfo = ctx.getInfoByPtr(getRootPtr(ser, ptr, IsPolymorphic<T>{}),
+                                       TPtrManager<T>::getOwnership());
       details::writeSize(ser.adapter(), ptrInfo.id);
       if (TPtrManager<T>::getOwnership() != PointerOwnershipType::Observer) {
         if (!ptrInfo.isSharedProcessed)
@@ -412,7 +401,7 @@ private:
     const auto& ctx = des.template context<TPolymorphicContext<RTTI>>();
     auto ptr = TPtrManager<TObj>::getPtr(obj);
     TPtrManager<TObj>::destroyPolymorphic(
-      obj, memResource, ctx.getPolymorphicHandler(*ptr));
+      obj, memResource, ctx.getPolymorphicHandler(ptr));
   }
 
   template<typename Des, typename TObj>
@@ -427,14 +416,21 @@ private:
       RTTI::template get<typename TPtrManager<TObj>::TElement>());
   }
 
-  template<typename T>
-  const void* getBasePtr(const T* ptr) const
+  template<typename Ser, typename T>
+  const void* getRootPtr(Ser&, const T* ptr, std::false_type) const
   {
-    // todo implement handling of types with virtual inheritance
-    // this is required to correctly track same object, when one object is
-    // derived and other is base class e.g. shared_ptr<Base> and
-    // weak_ptr<Derived> or pointer observer Base*
     return ptr;
+  }
+
+  // same pointer can be accessed through different types with the same base
+  // e.g. if we have Base class and Derived(Base) we'll get different pointer
+  // address depending if we access it through Base or Derived
+  // this function always returns "root" (Base) pointer.
+  template<typename Ser, typename T>
+  const void* getRootPtr(Ser& ser, const T* ptr, std::true_type) const
+  {
+    const auto& ctx = ser.template context<TPolymorphicContext<RTTI>>();
+    return ctx.getPolymorphicHandler(ptr)->getRootPtr(ptr);
   }
 
   template<typename Ser, typename TPtr, typename Fnc>
@@ -472,7 +468,13 @@ private:
        memResource](const std::shared_ptr<PolymorphicHandlerBase>& handler) {
         TPtrManager<T>::destroyPolymorphic(obj, memResource, handler);
       });
-    ptrInfo.processOwner(TPtrManager<T>::getPtr(obj));
+    auto ptr = TPtrManager<T>::getPtr(obj);
+    // might be null in case data pointer is not valid
+    if (ptr) {
+      ptrInfo.ownerPtr = ptr;
+      ptrInfo.ownerTypeId = ctx.getPolymorphicHandler(ptr)->getDerivedTypeId();
+      processObserverListPolymorphic(des, ptrInfo, ctx);
+    }
   }
 
   template<typename Des, typename T, typename Fnc>
@@ -485,17 +487,18 @@ private:
                        OwnershipType<PointerOwnershipType::Owner>) const
   {
     auto ptr = TPtrManager<T>::getPtr(obj);
-    if (ptr) {
-      fnc(des, *ptr);
-    } else {
+    if (!ptr) {
       TPtrManager<T>::create(
         obj,
         memResource,
         RTTI::template get<typename TPtrManager<T>::TElement>());
       ptr = TPtrManager<T>::getPtr(obj);
-      fnc(des, *ptr);
     }
-    ptrInfo.processOwner(ptr);
+    fnc(des, *ptr);
+    ptrInfo.ownerPtr = ptr;
+    ptrInfo.ownerTypeId =
+      RTTI::template get<typename TPtrManager<T>::TElement>();
+    processObserverList(des, ptrInfo);
   }
 
   template<typename Des, typename T, typename Fnc>
@@ -507,8 +510,11 @@ private:
                        std::true_type,
                        OwnershipType<PointerOwnershipType::SharedOwner>) const
   {
+    const auto& ctx = des.template context<TPolymorphicContext<RTTI>>();
+    const size_t baseTypeId =
+      RTTI::template get<typename TPtrManager<T>::TElement>();
+    size_t deserializedTypeId = 0;
     if (!ptrInfo.sharedState) {
-      const auto& ctx = des.template context<TPolymorphicContext<RTTI>>();
       ctx.deserialize(
         des,
         TPtrManager<T>::getPtr(obj),
@@ -522,12 +528,28 @@ private:
          memResource](const std::shared_ptr<PolymorphicHandlerBase>& handler) {
           TPtrManager<T>::destroyPolymorphic(obj, memResource, handler);
         });
-      if (!ptrInfo.sharedState)
-        TPtrManager<T>::saveToSharedState(
+      if (!ptrInfo.sharedState) {
+        TPtrManager<T>::saveToSharedStatePolymorphic(
           createAndGetSharedStateObj<T>(ptrInfo), obj);
+      }
+      ptrInfo.ownerPtr = TPtrManager<T>::getPtr(obj);
+      ptrInfo.ownerTypeId =
+        ctx.getPolymorphicHandler(TPtrManager<T>::getPtr(obj))
+          ->getDerivedTypeId();
+      // since we just deserialized an object, we can skip checking hierarchy
+      // chain by assigning baseType id instead of derived type id
+      deserializedTypeId = baseTypeId;
+    } else {
+      deserializedTypeId = ptrInfo.ownerTypeId;
     }
-    TPtrManager<T>::loadFromSharedState(getSharedStateObj<T>(ptrInfo), obj);
-    ptrInfo.processOwner(TPtrManager<T>::getPtr(obj));
+    if (auto hndl =
+          ctx.getPolymorphicHandler(baseTypeId, ptrInfo.sharedState->typeId)) {
+      TPtrManager<T>::loadFromSharedStatePolymorphic(
+        getSharedStateObj<T>(ptrInfo), obj, **hndl);
+      processObserverListPolymorphic(des, ptrInfo, ctx);
+    } else {
+      des.adapter().error(ReaderError::InvalidPointer);
+    }
   }
 
   template<typename Des, typename T, typename Fnc>
@@ -539,6 +561,8 @@ private:
                        std::false_type,
                        OwnershipType<PointerOwnershipType::SharedOwner>) const
   {
+    const size_t baseTypeId =
+      RTTI::template get<typename TPtrManager<T>::TElement>();
     if (!ptrInfo.sharedState) {
       auto ptr = TPtrManager<T>::getPtr(obj);
       if (ptr) {
@@ -553,9 +577,16 @@ private:
         ptr = TPtrManager<T>::getPtr(obj);
       }
       fnc(des, *ptr);
+      ptrInfo.ownerTypeId =
+        RTTI::template get<typename TPtrManager<T>::TElement>();
+      ptrInfo.ownerPtr = TPtrManager<T>::getPtr(obj);
     }
-    TPtrManager<T>::loadFromSharedState(getSharedStateObj<T>(ptrInfo), obj);
-    ptrInfo.processOwner(TPtrManager<T>::getPtr(obj));
+    if (baseTypeId == ptrInfo.ownerTypeId) {
+      TPtrManager<T>::loadFromSharedState(getSharedStateObj<T>(ptrInfo), obj);
+      processObserverList(des, ptrInfo);
+    } else {
+      des.adapter().error(ReaderError::InvalidPointer);
+    }
   }
 
   template<typename Des, typename T, typename Fnc, typename isPolymorph>
@@ -577,17 +608,85 @@ private:
                     OwnershipType<PointerOwnershipType::SharedOwner>{});
   }
 
-  template<typename Des, typename T, typename Fnc, typename isPolymorphic>
+  template<typename Des, typename T, typename Fnc>
   void deserializeImpl(MemResourceBase*,
                        PLCInfoDeserializer& ptrInfo,
-                       Des&,
+                       Des& des,
                        T& obj,
                        Fnc&&,
-                       isPolymorphic,
+                       std::false_type,
                        OwnershipType<PointerOwnershipType::Observer>) const
   {
-    ptrInfo.processObserver(
-      reinterpret_cast<void*&>(TPtrManager<T>::getPtrRef(obj)));
+    auto baseTypeId = RTTI::template get<typename TPtrManager<T>::TElement>();
+    void*(&ptr) = reinterpret_cast<void*&>(TPtrManager<T>::getPtrRef(obj));
+    if (ptrInfo.ownerPtr) {
+      if (ptrInfo.ownerTypeId == baseTypeId) {
+        ptr = ptrInfo.ownerPtr;
+      } else {
+        des.adapter().error(ReaderError::InvalidPointer);
+      }
+    } else {
+      ptrInfo.observersList.emplace_back(ObserverRef{ ptr, baseTypeId });
+    }
+  }
+
+  template<typename Des, typename T, typename Fnc>
+  void deserializeImpl(MemResourceBase*,
+                       PLCInfoDeserializer& ptrInfo,
+                       Des& des,
+                       T& obj,
+                       Fnc&&,
+                       std::true_type,
+                       OwnershipType<PointerOwnershipType::Observer>) const
+  {
+    const auto& ctx = des.template context<TPolymorphicContext<RTTI>>();
+    const size_t baseTypeId =
+      RTTI::template get<typename TPtrManager<T>::TElement>();
+    void*(&ptr) = reinterpret_cast<void*&>(TPtrManager<T>::getPtrRef(obj));
+    if (ptrInfo.ownerPtr) {
+      if (auto hndl =
+            ctx.getPolymorphicHandler(baseTypeId, ptrInfo.ownerTypeId)) {
+        ptr = hndl->get()->fromDerivedToBasePtr(ptrInfo.ownerPtr);
+      } else {
+        des.adapter().error(ReaderError::InvalidPointer);
+      }
+    } else {
+      ptrInfo.observersList.emplace_back(ObserverRef{ ptr, baseTypeId });
+    }
+  }
+
+  template<typename Des>
+  void processObserverList(Des& des, PLCInfoDeserializer& ptrInfo) const
+  {
+    assert(ptrInfo.ownershipType != PointerOwnershipType::Observer);
+    for (auto& o : ptrInfo.observersList) {
+      if (ptrInfo.ownerTypeId == o.baseTypeId) {
+        o.obj.get() = ptrInfo.ownerPtr;
+      } else {
+        des.adapter().error(ReaderError::InvalidPointer);
+      }
+    }
+    ptrInfo.observersList.clear();
+    ptrInfo.observersList.shrink_to_fit();
+  }
+
+  template<typename Des>
+  void processObserverListPolymorphic(
+    Des& des,
+    PLCInfoDeserializer& ptrInfo,
+    const TPolymorphicContext<RTTI>& ctx) const
+  {
+    assert(ptrInfo.ownershipType != PointerOwnershipType::Observer);
+    for (auto& o : ptrInfo.observersList) {
+      if (auto hndl =
+            ctx.getPolymorphicHandler(o.baseTypeId, ptrInfo.ownerTypeId)) {
+        o.obj.get() = hndl->get()->fromDerivedToBasePtr(ptrInfo.ownerPtr);
+      } else {
+        des.adapter().error(ReaderError::InvalidPointer);
+      }
+    }
+    ptrInfo.observersList.clear();
+    ptrInfo.observersList.shrink_to_fit();
   }
 
   template<typename T>
