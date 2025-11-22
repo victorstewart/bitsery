@@ -28,7 +28,7 @@ TEST(SerializeExtDirectWriteBuffer, WriteAlignedAndVerify) {
                 (void)s;
                 (void)o;
                 EXPECT_TRUE(dst != nullptr);
-                EXPECT_EQ(reinterpret_cast<uintptr_t>(dst) % 16, 0);
+                EXPECT_EQ(reinterpret_cast<uintptr_t>(dst) % 16, static_cast<uintptr_t>(0));
                 
                 for(uint32_t i=0; i<size; ++i) {
                     dst[i] = static_cast<uint8_t>(i);
