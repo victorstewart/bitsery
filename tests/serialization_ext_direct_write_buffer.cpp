@@ -52,7 +52,7 @@ TEST(SerializeExtDirectWriteBuffer, WriteAlignedAndVerify) {
                  size_t alignment = 16;
                  size_t padding = (alignment - (curr % alignment)) % alignment;
                  
-                 EXPECT_EQ(padding, 12);
+                 EXPECT_EQ(padding, static_cast<size_t>(12));
                  
                  // Read padding
                  std::vector<uint8_t> pad(padding);
